@@ -5,6 +5,9 @@ import engine.helper.MarioActions;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.VolatileImage;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,12 +18,12 @@ import static engine.helper.GameStatus.RUNNING;
 
 public class MarioGymGame extends MarioGame {
 
-    private final String level;
+    private String level;
     private final ArrayList<MarioEvent> gameEvents;
     private final ArrayList<MarioAgentEvent> agentEvents;
     private final int actionSpace = MarioActions.numberOfActions();
     private final int observationSpace = 16 * 16;
-    private final boolean visual;
+    private boolean visual;
     private VisualRecord visualData;
 
 
@@ -28,7 +31,7 @@ public class MarioGymGame extends MarioGame {
         return actionSpace;
     }
 
-    public int getObservationSpace(){
+    public int getObservationSpace() {
         return observationSpace;
     }
 
@@ -65,26 +68,42 @@ public class MarioGymGame extends MarioGame {
         this.agentEvents = new ArrayList<>();
         this.visual = visual;
         if (visual) {
-            float scale = 2;
-            this.window = new JFrame("Mario AI Framework");
-            this.render = new MarioRender(scale);
-            this.window.setContentPane(this.render);
-            this.window.pack();
-            this.window.setResizable(false);
-            this.window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            this.render.init();
-            this.window.setVisible(true);
+            enableVisual();
+        }
+    }
+
+    public void enableVisual() {
+        this.visual = true;
+        float scale = 2;
+        this.window = new JFrame("Mario AI Framework");
+        this.render = new MarioRender(scale);
+        this.window.setContentPane(this.render);
+        this.window.pack();
+        this.window.setResizable(false);
+        this.window.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        this.render.init();
+        this.window.setVisible(true);
+    }
+
+    public void disableVisual() {
+        this.visual = false;
+    }
+
+    public void make(String level) throws IOException {
+        if (level.indexOf("lvl") > 0) {
+            this.level = new String(Files.readAllBytes(Paths.get("./levels/original/" + level)));
+        } else {
+            this.level = level;
         }
     }
 
     public ResetObject reset() {
         // TODO some default values which we will change later
-        int timer = 10000;
         int marioState = 0;
 
         this.world = new MarioWorld(this.killEvents);
         this.world.visuals = visual;
-        this.world.initializeLevel(level, 1000 * timer);
+        this.world.initializeLevel(level, 10000000);
         if (visual) {
             this.world.initializeVisuals(this.render.getGraphicsConfiguration());
         }
@@ -92,14 +111,15 @@ public class MarioGymGame extends MarioGame {
         this.world.mario.isFire = marioState > 1;
         this.world.update(new boolean[MarioActions.numberOfActions()]);
 
+        // reset events
+        gameEvents.clear();
+        agentEvents.clear();
+
         //initialize graphics
-        VolatileImage renderTarget = null;
-        Graphics backBuffer = null;
-        Graphics currentBuffer = null;
         if (visual) {
-            renderTarget = this.render.createVolatileImage(MarioGame.width, MarioGame.height);
-            backBuffer = this.render.getGraphics();
-            currentBuffer = renderTarget.getGraphics();
+            VolatileImage renderTarget = this.render.createVolatileImage(MarioGame.width, MarioGame.height);
+            Graphics backBuffer = this.render.getGraphics();
+            Graphics currentBuffer = renderTarget.getGraphics();
             visualData = new VisualRecord(renderTarget, backBuffer, currentBuffer);
             this.render.addFocusListener(this.render);
         }
