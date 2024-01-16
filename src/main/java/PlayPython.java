@@ -14,11 +14,17 @@ public class PlayPython {
             levelString = args[1];
         }
 
-        MarioGymGame marioGymGame = new MarioGymGame(levelString, visual);
+        // TODO pass these as params
+        int nServers = 50;
+        int startPort = 25000;
 
-        GatewayServer server = new GatewayServer(marioGymGame);
-        System.out.println("Server will start...");
-        server.start();
+        for (int port = startPort; port < startPort + nServers; port++){
+            MarioGymGame marioGymGame = new MarioGymGame(levelString, visual);
+            GatewayServer server = new GatewayServer(marioGymGame, port);
+            System.out.printf("Server starting on port %d...\n", port);
+            server.start();
+        }
+
     }
 
 
