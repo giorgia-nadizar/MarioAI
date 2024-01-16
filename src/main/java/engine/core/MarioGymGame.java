@@ -58,6 +58,10 @@ public class MarioGymGame extends MarioGame {
     }
 
 
+    public MarioGymGame() {
+        this(null);
+    }
+
     public MarioGymGame(String level) {
         this(level, false);
     }
