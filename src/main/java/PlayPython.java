@@ -7,7 +7,7 @@ public class PlayPython {
     // https://www.py4j.org/getting_started.html
 
     public static void main(String[] args) {
-        int nServers = 50;
+        int nServers = 100;
         int startPort = 25000;
         if (args.length > 0) {
             startPort = Integer.parseInt(args[0]);
