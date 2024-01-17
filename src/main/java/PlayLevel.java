@@ -31,9 +31,24 @@ public class PlayLevel {
         return content;
     }
 
+    private static String LEVEL = "----------------------------------------------------------------------------------------------------\n" +
+            "----------------------------------------------------------------------------------------------------\n" +
+            "----------------------------------------------------------------------------------------------------\n" +
+            "----------------------------------------------------------------------------------------------------\n" +
+            "---------------------------------------E------------------------------------------------------------\n" +
+            "-----------------------------------SSSSSSSSSS-------------------------------------------------------\n" +
+            "----------------------------------------------------------------------------------------------------\n" +
+            "----------------------------------------------------------------------------------------------------\n" +
+            "B--------------------------------------------------X------------------------------------------------\n" +
+            "b------------------------------------xxx---SSSSSSSSX-------------------------xxx--------------------\n" +
+            "----?QQ-----------------------------xxX-x-----------------------------------xxX-x-------------------\n" +
+            "x------------------xxx------xxxxx--xx-X--x-------------------------------B-xx-X--x------------------\n" +
+            "-xxxxxxxxxxxxxxxxxxx--xxxxxxx----xxx--X---xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx--X---xxxxxxxxxxxxxxxxxx\n" +
+            "XXXXXXXXXXXXXXXXXXXX--XXXXXXX--X-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX--XXXXXXXXXXXXXXXXXXXXXX";
+
     public static void main(String[] args) {
         MarioGame game = new MarioGame();
-         printResults(game.playGame(getLevel("./levels/original/lvl-trial.txt"), 200, 0));
-//        printResults(game.runGame(new agents.robinBaumgarten.Agent(), getLevel("./levels/original/lvl-1.txt"), 20, 0, true));
+        // printResults(game.playGame(getLevel("./levels/original/lvl-trial.txt"), 200, 0));
+        printResults(game.runGame(new agents.robinBaumgarten.Agent(), LEVEL, 20, 0, true));
     }
 }
