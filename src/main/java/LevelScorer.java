@@ -1,5 +1,4 @@
 import engine.core.MarioGame;
-import engine.core.MarioGymGame;
 import engine.core.MarioResult;
 import py4j.GatewayServer;
 
@@ -16,6 +15,11 @@ public class LevelScorer {
     public MarioResult score(String level) {
         MarioGame game = new MarioGame();
         return game.runGame(new agents.robinBaumgarten.Agent(), level, 20, 0, false);
+    }
+
+    public MarioResult visualize(String level) {
+        MarioGame game = new MarioGame();
+        return game.runGame(new agents.robinBaumgarten.Agent(), level, 20, 0, true);
     }
 
 
