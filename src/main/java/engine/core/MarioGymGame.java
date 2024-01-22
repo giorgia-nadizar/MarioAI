@@ -1,12 +1,26 @@
 package engine.core;
 
 import engine.helper.MarioActions;
+import org.jcodec.api.SequenceEncoder;
+import org.jcodec.common.Format;
+import org.jcodec.common.io.NIOUtils;
+import org.jcodec.common.io.SeekableByteChannel;
+import org.jcodec.common.model.ColorSpace;
+import org.jcodec.common.model.Picture;
+import org.jcodec.common.model.Rational;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.awt.image.VolatileImage;
+import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +39,7 @@ public class MarioGymGame extends MarioGame {
     private final int observationSpace = 16 * 16;
     private boolean visual;
     private VisualRecord visualData;
+    private List<BufferedImage> images;
 
 
     public int getActionSpace() {
@@ -77,6 +92,7 @@ public class MarioGymGame extends MarioGame {
     }
 
     public void enableVisual() {
+        this.images = new ArrayList<>();
         this.visual = true;
         float scale = 2;
         this.window = new JFrame("Mario AI Framework");
@@ -110,6 +126,8 @@ public class MarioGymGame extends MarioGame {
         this.world.initializeLevel(level, 10000000);
         if (visual) {
             this.world.initializeVisuals(this.render.getGraphicsConfiguration());
+            this.images.clear();
+            this.window.setSize(500, 500);
         }
         this.world.mario.isLarge = marioState > 0;
         this.world.mario.isFire = marioState > 1;
@@ -126,6 +144,17 @@ public class MarioGymGame extends MarioGame {
             Graphics currentBuffer = renderTarget.getGraphics();
             visualData = new VisualRecord(renderTarget, backBuffer, currentBuffer);
             this.render.addFocusListener(this.render);
+
+
+            BufferedImage bufferedImage = new BufferedImage(
+                    renderTarget.getWidth(), renderTarget.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2d = bufferedImage.createGraphics();
+            try {
+                g2d.drawImage(renderTarget, 0, 0, null);
+            } finally {
+                g2d.dispose();
+            }
+            images.add(bufferedImage);
         }
 
         int[][] observation = new MarioForwardModel(this.world.clone()).getMarioCompleteObservation();
@@ -153,6 +182,15 @@ public class MarioGymGame extends MarioGame {
         //render world
         if (visual) {
             this.render.renderWorld(this.world, visualData.renderTarget, visualData.backBuffer, visualData.currentBuffer);
+            BufferedImage bufferedImage = new BufferedImage(
+                    visualData.renderTarget.getWidth(), visualData.renderTarget.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2d = bufferedImage.createGraphics();
+            try {
+                g2d.drawImage(visualData.renderTarget, 0, 0, null);
+            } finally {
+                g2d.dispose();
+            }
+            images.add(bufferedImage);
         }
 
         MarioResult currentResult = new MarioResult(world, gameEvents, agentEvents);
@@ -166,4 +204,101 @@ public class MarioGymGame extends MarioGame {
     }
 
 
+    public void saveVideo(double frameRate, String fileName) throws IOException {
+        File file = new File(fileName);
+        SeekableByteChannel channel = NIOUtils.writableChannel(file);
+        SequenceEncoder encoder =
+                new SequenceEncoder(
+                        channel,
+                        Rational.R((int) Math.round(frameRate), 1),
+                        Format.MOV,
+                        org.jcodec.common.Codec.H264,
+                        null);
+        // encode
+        try {
+            for (BufferedImage image : images) {
+                Picture picture = Picture.create(image.getWidth(), image.getHeight(), ColorSpace.RGB);
+                bufImgToPicture(image, picture);
+                encoder.encodeNativeFrame(picture);
+            }
+        } catch (IOException ex) {
+            System.out.printf("Cannot encode image due to %s", ex);
+        }
+        encoder.finish();
+        NIOUtils.closeQuietly(channel);
+    }
+
+
+    private static void bufImgToPicture(BufferedImage src, Picture dst) {
+        byte[] dstData = dst.getPlaneData(0);
+        int off = 0;
+        for (int i = 0; i < src.getHeight(); i++) {
+            for (int j = 0; j < src.getWidth(); j++) {
+                int rgb1 = src.getRGB(j, i);
+                int alpha = (rgb1 >> 24) & 0xff;
+                if (alpha == 0xff) {
+                    dstData[off++] = (byte) (((rgb1 >> 16) & 0xff) - 128);
+                    dstData[off++] = (byte) (((rgb1 >> 8) & 0xff) - 128);
+                    dstData[off++] = (byte) ((rgb1 & 0xff) - 128);
+                } else {
+                    int nalpha = 255 - alpha;
+                    dstData[off++] = (byte) (((((rgb1 >> 16) & 0xff) * alpha + 0xff * nalpha) >> 8) - 128);
+                    dstData[off++] = (byte) (((((rgb1 >> 8) & 0xff) * alpha + 0xff * nalpha) >> 8) - 128);
+                    dstData[off++] = (byte) ((((rgb1 & 0xff) * alpha + 0xff * nalpha) >> 8) - 128);
+                }
+            }
+        }
+    }
+
+
+    private void saveVideoFF(
+            double frameRate, String fileName, int compression) throws IOException {
+        File file = new File(fileName);
+        // save all files
+        String workingDirName = file.getAbsoluteFile().getParentFile().getPath();
+        String imagesDirName = workingDirName + File.separator + "imgs." + System.currentTimeMillis();
+        Files.createDirectories(Path.of(imagesDirName));
+        List<Path> toDeletePaths = new ArrayList<>();
+        for (int i = 0; i < images.size(); i++) {
+            File imageFile =
+                    new File(imagesDirName + File.separator + String.format("frame%06d", i) + ".jpg");
+            ImageIO.write(images.get(i), "jpg", imageFile);
+            toDeletePaths.add(imageFile.toPath());
+        }
+        toDeletePaths.add(Path.of(imagesDirName));
+        // invoke ffmpeg
+        String command =
+                String.format(
+                        "ffmpeg -y -r %d -i %s/frame%%06d.jpg -vcodec libx264 -crf %d -pix_fmt yuv420p %s",
+                        (int) Math.round(frameRate), imagesDirName, compression, file.getPath());
+        ProcessBuilder pb = new ProcessBuilder(command.split(" "));
+        pb.directory(new File(workingDirName));
+        StringBuilder sb = new StringBuilder();
+        try {
+            Process process = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            reader.close();
+            int exitVal = process.waitFor();
+            if (exitVal < 0) {
+                throw new IOException(
+                        String.format("Unexpected exit val: %d. Full output is:%n%s", exitVal, sb));
+            }
+        } catch (IOException | InterruptedException e) {
+            throw (e instanceof IOException) ? (IOException) e : (new IOException(e));
+        } finally {
+            // delete all files
+            for (Path path : toDeletePaths) {
+                try {
+                    Files.delete(path);
+                } catch (IOException e) {
+                    System.out.println("Cannot delete file.");
+                }
+            }
+        }
+    }
 }
+
